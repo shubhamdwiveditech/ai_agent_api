@@ -16,7 +16,6 @@ class ChatRequest(BaseModel):
         default=None,
         description="Existing chat session UUID. If omitted, a new session is created.",
     )
-    user_id: str | None = Field(default=None, description="Client-supplied end-user identifier.")
     message: str = Field(..., min_length=1, description="The new user message.")
     system_prompt: str | None = Field(default=None, description="Optional system prompt for new sessions.")
     model: str | None = Field(default=None, description="Override the configured chat model.")

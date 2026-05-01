@@ -6,8 +6,8 @@ from typing import Any
 from app.core.config import get_settings
 from app.schemas.embed_schema import EmbedItem, EmbedRequest, EmbedResponse
 from app.services.common_service import new_uuid
-from app.services.llm_services.openai_service import OpenAIClient
-from app.services.supabase_service import SupabaseClient
+from app.services.llm_services.openai_service import get_openai
+from app.services.supabase_service import SupabaseService
 
 
 EMBEDDINGS_TABLE = "embeddings"
@@ -16,11 +16,11 @@ EMBEDDINGS_TABLE = "embeddings"
 async def generate_and_store_embeddings(
     body: EmbedRequest,
     *,
-    openai: OpenAIClient,
-    supabase: SupabaseClient,
+    supabase: SupabaseService,
 ) -> EmbedResponse:
     settings = get_settings()
     model = body.model or settings.openai_embed_model
+    openai = get_openai()
 
     inputs = [body.input] if isinstance(body.input, str) else list(body.input)
     if not inputs:

@@ -21,8 +21,7 @@ from fastapi import Header, HTTPException, Request, status
 
 from app.core.config import get_settings
 from app.schemas.user_context_schema import TenantContext, UserContext
-from app.core.supabase_headers import build_auth_headers
-from app.services.supabase_service import SupabaseClient, SupabaseError
+from app.services.user_service import get_user_service
 
 
 _log = logging.getLogger(__name__)
@@ -118,20 +117,17 @@ async def require_user(
     # 1. Local signature check (best-effort; skipped if no secret configured).
     _verify_jwt_locally(token)
 
-    # 2. Server-side validation by calling fn_get_profile with the JWT forwarded.
-    client = SupabaseClient.for_user(token)
+    service = get_user_service()
     try:
-        envelope = await client.rpc("fn_get_profile", {})
-    except SupabaseError as exc:
-        # PostgREST returns 401 for bad JWTs; surface that to the client.
-        if exc.status_code in (401, 403):
-            raise HTTPException(status_code=401, detail="Invalid or expired access token") from exc
-        _log.exception("fn_get_profile call failed: %s", exc.detail)
+        user = await service.get_user_context(token)
+    except HTTPException:
+        raise
+    except Exception as exc:  # noqa: BLE001
+        _log.exception("fn_get_profile call failed: %s", exc)
         raise HTTPException(status_code=502, detail="Auth backend unavailable") from exc
-    finally:
-        await client.aclose()
 
-    user = _parse_envelope(envelope, access_token=token)
+    if not user:
+        raise HTTPException(status_code=401, detail="Invalid or expired access token")
     request.state.user = user
     return user
 

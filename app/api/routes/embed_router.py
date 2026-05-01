@@ -3,19 +3,20 @@ from __future__ import annotations
 
 from fastapi import APIRouter, Depends
 
-from app.core.auth import require_api_key
+from app.core.auth import require_api_key, require_user
 from app.schemas.embed_schema import EmbedRequest, EmbedResponse
+from app.schemas.user_context_schema import UserContext
 from app.services.embed_service.embed_service import generate_and_store_embeddings
-from app.services.llm_services.openai_service import OpenAIClient, get_openai
-from app.services.supabase_service import SupabaseClient, get_supabase
+from app.services.supabase_service import SupabaseService, get_supabase_service
 
-router = APIRouter(prefix="/embed", tags=["embed"], dependencies=[Depends(require_api_key)])
+router = APIRouter(prefix="/embed", tags=["embed"], dependencies=[Depends(require_api_key), Depends(require_user)])
 
 
 @router.post("", response_model=EmbedResponse, response_model_exclude_none=True)
 async def embed(
     body: EmbedRequest,
-    supabase: SupabaseClient = Depends(get_supabase),
-    openai: OpenAIClient = Depends(get_openai),
+    user: UserContext = Depends(require_user),
+    supabase: SupabaseService = Depends(get_supabase_service),
 ):
-    return await generate_and_store_embeddings(body, openai=openai, supabase=supabase)
+    _ = user
+    return await generate_and_store_embeddings(body, supabase=supabase)

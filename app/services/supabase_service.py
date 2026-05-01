@@ -1,16 +1,22 @@
+"""Async Supabase REST client + normalized RPC helpers.
+
+This module provides:
+- `SupabaseService`: REST/RPC helper that normalizes the response envelope and
+  exposes typed helpers for common RPCs (profile + default LLM configs)
 """
-Designed to be used for invoking Supabase RPC functions with a normalized response envelope.
-"""
-from typing import Dict, List  # noqa: E402
+
 from __future__ import annotations
-from typing import Any
 
-from app.core.supabase_headers import build_auth_headers  # noqa: E402
-from app.core.config import settings  # noqa: E402
-from app.core.http import http_client  # noqa: E402
-from app.schemas.current_user_schema import Msi  # noqa: E402
+from typing import Any, Dict, List
 
+from app.core.config import settings
+from app.core.http import http_client
+from app.core.supabase_headers import build_auth_headers
+# (Typed user/llm helpers live in app/services/user_service.py)
 
+# ----------------------------------------------------------------------
+# Normalized Supabase RPC service helpers
+# ----------------------------------------------------------------------
 class SupabaseService:
     """Utility wrapper around Supabase RPC invocations."""
 
@@ -88,9 +94,9 @@ class SupabaseService:
         except Exception:
             return self._normalize_error(message="Invalid Supabase RPC response", status_code=response.status_code)
 
-
 _supabase_service = SupabaseService()
 
 
 def get_supabase_service() -> SupabaseService:
     return _supabase_service
+
