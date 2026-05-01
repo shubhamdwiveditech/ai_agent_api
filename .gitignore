@@ -1,0 +1,21 @@
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+.env
+.env.local
+# keep tracked example envs (.env.dev, .env.staging, .env.prod committed without secrets)
+!.env.example
+!.env.dev
+!.env.staging
+!.env.prod
+.idea/
+.vscode/*
+!.vscode/launch.json
+!.vscode/settings.json
+.DS_Store
+*.log
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
