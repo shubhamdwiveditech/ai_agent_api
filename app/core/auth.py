@@ -21,11 +21,13 @@ from fastapi import Header, HTTPException, Request, status
 
 from app.core.config import get_settings
 from app.schemas.user_context_schema import TenantContext, UserContext
+from app.core.supabase_headers import build_auth_headers
 from app.services.supabase_service import SupabaseClient, SupabaseError
 
 
 _log = logging.getLogger(__name__)
 _BEARER = "bearer"
+
 
 
 def _extract_bearer(authorization: str | None) -> str:

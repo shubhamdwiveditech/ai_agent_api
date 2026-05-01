@@ -32,25 +32,9 @@ class Settings(BaseSettings):
     environment: str = "dev"
     app_name: str = "ai_agent_api"
 
-    # Auth
-    api_key: str = Field(..., description="Static API key for X-API-Key auth")
-
     # Supabase REST (publishable / anon key + project URL)
     supabase_url: str = Field(..., description="Supabase project URL, e.g. https://<ref>.supabase.co")
     supabase_key: str = Field(..., description="Supabase publishable / anon key (apikey header)")
-
-    # JWT verification
-    # If set, JWT is verified locally with HS256 (legacy Supabase secret).
-    # If empty, JWT verification is skipped locally and we rely on
-    # fn_get_profile (PostgREST validates the JWT server-side via the apikey).
-    supabase_jwt_secret: str | None = None
-    supabase_jwt_audience: str = "authenticated"
-
-    # OpenAI
-    openai_api_key: str = Field(..., description="OpenAI API key")
-    openai_chat_model: str = "gpt-4o-mini"
-    openai_embed_model: str = "text-embedding-3-small"
-    openai_embed_dims: int = 1536
 
     # RAG tuning (mirrors edge function defaults)
     rag_match_threshold: float = 0.3
@@ -67,7 +51,11 @@ class Settings(BaseSettings):
 
     @property
     def supabase_rest_url(self) -> str:
-        return f"{self.supabase_url.rstrip('/')}/rest/v1"
+        return f"{self.supabase_url.rstrip('/')}/rest/v1/rpc"
+    
+    @property
+    def supabase_edge_function_url(self) -> str:
+        return f"{self.supabase_url.rstrip('/')}/functions/v1"
 
     @property
     def supabase_storage_url(self) -> str:
@@ -77,3 +65,7 @@ class Settings(BaseSettings):
 @lru_cache(maxsize=1)
 def get_settings() -> Settings:
     return Settings()  # type: ignore[call-arg]
+
+
+# Backwards-compatible singleton import style (some modules expect `settings`).
+settings = get_settings()
