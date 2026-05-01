@@ -100,3 +100,12 @@ _supabase_service = SupabaseService()
 def get_supabase_service() -> SupabaseService:
     return _supabase_service
 
+
+def get_supabase() -> SupabaseService:
+    """FastAPI dependency: shared Supabase DAL service."""
+    return _supabase_service
+
+
+async def close_supabase() -> None:
+    """Lifecycle hook: close shared HTTP clients."""
+    await http_client.aclose()

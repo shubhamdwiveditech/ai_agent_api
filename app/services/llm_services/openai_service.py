@@ -1,4 +1,4 @@
-"""Async OpenAI client (chat completions + embeddings) over httpx.
+"""Async OpenAI REST client + LLMService implementation over httpx.
 
 We avoid the official `openai` SDK so the dependency surface stays small
 and we keep full control over streaming.
@@ -12,6 +12,8 @@ import httpx
 from fastapi import HTTPException
 
 from app.core.config import get_settings
+from app.schemas.llm_context_schema import LLMModelConfig
+from app.services.llm_services.llm_base import LLMService
 
 
 OPENAI_BASE = "https://api.openai.com/v1"
@@ -22,14 +24,16 @@ class OpenAIError(HTTPException):
         super().__init__(status_code=code, detail=detail)
 
 
-class OpenAIClient:
-    def __init__(self, api_key: str, timeout: float = 60.0) -> None:
+class OpenAIService:
+    """Raw REST client for OpenAI / OpenAI-compatible endpoints."""
+
+    def __init__(self, api_key: str, *, base_url: str = OPENAI_BASE, timeout: float = 60.0) -> None:
         self._headers = {
             "Authorization": f"Bearer {api_key}",
             "Content-Type": "application/json",
         }
         self._client = httpx.AsyncClient(
-            base_url=OPENAI_BASE, headers=self._headers, timeout=timeout
+            base_url=base_url.rstrip("/"), headers=self._headers, timeout=timeout
         )
 
     async def aclose(self) -> None:
@@ -124,17 +128,71 @@ class OpenAIClient:
         return resp.json()
 
 
+class OpenAILLMService(LLMService):
+    """LLMService implementation for OpenAI / OpenAI-compatible endpoints."""
+
+    def __init__(self, *, config: LLMModelConfig) -> None:
+        if not config.api_key:
+            raise ValueError("OpenAI config missing api_key")
+        if not config.endpoint:
+            raise ValueError("OpenAI config missing endpoint")
+        if not config.model:
+            raise ValueError("OpenAI config missing model")
+
+        self._model = config.model
+        self._client = OpenAIService(api_key=config.api_key, base_url=config.endpoint)
+
+    @property
+    def model(self) -> str:
+        return self._model
+
+    async def chat_completion(
+        self,
+        *,
+        messages: list[dict[str, str]],
+        temperature: float = 0.7,
+        max_tokens: int | None = None,
+    ) -> dict[str, Any]:
+        return await self._client.chat_completion(
+            model=self._model,
+            messages=messages,
+            temperature=temperature,
+            max_tokens=max_tokens,
+        )
+
+    async def chat_completion_stream(
+        self,
+        *,
+        messages: list[dict[str, str]],
+        temperature: float = 0.7,
+        max_tokens: int | None = None,
+    ) -> AsyncIterator[dict[str, Any]]:
+        async for chunk in self._client.chat_completion_stream(
+            model=self._model,
+            messages=messages,
+            temperature=temperature,
+            max_tokens=max_tokens,
+        ):
+            yield chunk
+
+    async def embeddings(self, *, input: str | list[str]) -> dict[str, Any]:
+        return await self._client.embeddings(model=self._model, input=input)
+
+    async def aclose(self) -> None:
+        await self._client.aclose()
+
+
 # ----------------------------------------------------------------------
 # FastAPI dependency / lifecycle helpers
 # ----------------------------------------------------------------------
-_singleton: OpenAIClient | None = None
+_singleton: OpenAIService | None = None
 
 
-def get_openai() -> OpenAIClient:
+def get_openai() -> OpenAIService:
     global _singleton
     if _singleton is None:
         s = get_settings()
-        _singleton = OpenAIClient(api_key=s.openai_api_key, timeout=s.http_timeout_seconds)
+        _singleton = OpenAIService(api_key=s.openai_api_key, base_url=OPENAI_BASE, timeout=s.http_timeout_seconds)
     return _singleton
 
 

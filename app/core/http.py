@@ -17,9 +17,17 @@ class HTTPClient:
             self._client = httpx.AsyncClient(timeout=settings.http_timeout_seconds)
         return self._client
 
-    async def post(self, *, url: str, json: object, headers: dict[str, str], raise_for_status: bool = True) -> httpx.Response:
+    async def post(
+        self,
+        *,
+        url: str,
+        json: object,
+        headers: dict[str, str],
+        params: dict[str, str] | None = None,
+        raise_for_status: bool = True,
+    ) -> httpx.Response:
         client = self._get_client()
-        resp = await client.post(url, json=json, headers=headers)
+        resp = await client.post(url, json=json, headers=headers, params=params)
         if raise_for_status:
             resp.raise_for_status()
         return resp
