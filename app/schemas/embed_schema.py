@@ -7,7 +7,7 @@ from pydantic import BaseModel, Field
 
 
 class EmbedRequest(BaseModel):
-    id: int = Field(..., ge=1)
+    item_id: int = Field(..., ge=1)
 
 class EmbedItem(BaseModel):
     id: str | None = None

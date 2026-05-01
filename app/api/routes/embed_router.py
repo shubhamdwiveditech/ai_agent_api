@@ -9,7 +9,7 @@ from app.schemas.embed_schema import (
     EmbedRequest,
 )
 from app.schemas.user_context_schema import UserContext
-from app.services.kb_item_embed_service import embed_knowledge_item
+from app.services.embed_service.kb_item_embed_service import embed_knowledge_item
 from app.services.supabase_service import SupabaseService, get_supabase_service
 
 router = APIRouter(prefix="/embed", tags=["embed"], dependencies=[Depends(require_user)])
@@ -22,8 +22,8 @@ async def embed(
     supabase: SupabaseService = Depends(get_supabase_service),
 ):
     chunks = await embed_knowledge_item(
-        item_id=body.id,
+        item_id=body.item_id,
         access_token=user.access_token,
         supabase=supabase,
     )
-    return EmbedKnowledgeItemResponse(item_id=body.id, chunks=chunks)
+    return EmbedKnowledgeItemResponse(item_id=body.item_id, chunks=chunks)

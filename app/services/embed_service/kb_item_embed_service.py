@@ -11,7 +11,7 @@ from fastapi import HTTPException
 
 from app.core.config import get_settings
 from app.core.http import http_client
-from app.services.content_parser_service import parse_file_bytes
+from app.services.embed_service.content_parser_service import parse_file_bytes
 from app.services.llm_services.llm_factory import get_llm_service
 from app.services.supabase_service import SupabaseService
 from app.services.user_service import get_user_service
@@ -117,6 +117,8 @@ async def embed_knowledge_item(
         raise HTTPException(status_code=502, detail="Default LLM config not found")
 
     llm = get_llm_service(llm_context, mode="embed")
+    expected_dims = settings.embed_expected_dims
+    embed_model_name = getattr(getattr(llm_context, "embed_model", None), "model", None)
     try:
         text = await _extract_item_text(access_token=access_token, supabase=supabase, item=item)
         if not text or len(text) < 20:
@@ -138,7 +140,18 @@ async def embed_knowledge_item(
             if not isinstance(data, list) or len(data) != len(batch):
                 raise ValueError("Embedding count mismatch")
             ordered = [d for d in sorted(data, key=lambda d: d.get("index", 0))]
-            embeddings.extend([d["embedding"] for d in ordered])
+            for d in ordered:
+                vec = d.get("embedding")
+                if not isinstance(vec, list):
+                    raise ValueError("Invalid embedding payload from provider")
+                if expected_dims is not None and len(vec) != expected_dims:
+                    model_hint = f" (model={embed_model_name})" if embed_model_name else ""
+                    raise ValueError(
+                        f"Embedding dimension mismatch{model_hint}: expected {expected_dims}, got {len(vec)}. "
+                        "Fix by selecting a model with the expected dimensions in your default embed config "
+                        "(fn_get_default_llm), or change `knowledge_base_chunks.embedding` vector dimension."
+                    )
+                embeddings.append(vec)
 
         payload = [
             {

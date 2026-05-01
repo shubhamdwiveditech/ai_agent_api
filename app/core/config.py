@@ -45,6 +45,7 @@ class Settings(BaseSettings):
     embed_chunk_overlap: int = 150
     embed_batch_size: int = 16
     embed_storage_bucket: str = "knowledge-base"
+    embed_expected_dims: int | None = 1536
 
     # HTTP
     http_timeout_seconds: float = 60.0
