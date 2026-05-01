@@ -7,7 +7,7 @@ from pydantic import BaseModel, Field
 
 
 class EmbedRequest(BaseModel):
-    id: int
+    id: int = Field(..., ge=1)
 
 class EmbedItem(BaseModel):
     id: str | None = None
@@ -21,3 +21,9 @@ class EmbedResponse(BaseModel):
     count: int
     items: list[EmbedItem]
     usage: dict[str, Any] | None = None
+
+
+class EmbedKnowledgeItemResponse(BaseModel):
+    ok: bool = True
+    item_id: int
+    chunks: int

@@ -4,7 +4,7 @@ A small **FastAPI** service with:
 
 - `POST /auth/token` — email/password login via **Supabase Auth REST** (returns `access_token`)
 - `POST /chat` — authenticated chat endpoint (requires `Authorization: Bearer <token>`)
-- `POST /embed` — authenticated embeddings endpoint (requires `Authorization: Bearer <token>`)
+- `POST /embed` — embed a Supabase knowledge-base item (file or website) via RPC + Storage download
 
 ## Stack
 
@@ -29,7 +29,6 @@ Required:
 - `API_KEY` is **not used** (X-API-Key auth removed)
 - `SUPABASE_URL`
 - `SUPABASE_KEY` (anon/publishable key, sent as `apikey`)
-- `OPENAI_API_KEY` (used by the OpenAI REST client)
 
 ## Run locally
 
@@ -49,11 +48,11 @@ curl -sS -X POST http://127.0.0.1:8000/auth/token \
   -d '{"email":"you@example.com","password":"your-password"}'
 ```
 
-2) Call embed:
+2) Embed a knowledge-base item by id:
 
 ```bash
 curl -sS -X POST http://127.0.0.1:8000/embed \
   -H "Authorization: Bearer <ACCESS_TOKEN>" \
   -H 'Content-Type: application/json' \
-  -d '{"input":"hello","persist":false}'
+  -d '{"id":123}'
 ```

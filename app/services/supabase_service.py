@@ -11,7 +11,7 @@ from typing import Any, Dict, List
 
 from app.core.config import settings
 from app.core.http import http_client
-from app.core.supabase_headers import build_auth_headers
+from app.core.supabase_headers import build_auth_headers, build_supabase_headers
 # (Typed user/llm helpers live in app/services/user_service.py)
 
 # ----------------------------------------------------------------------
@@ -93,6 +93,18 @@ class SupabaseService:
             return self._normalize_success(payload=response.json(), status_code=response.status_code)
         except Exception:
             return self._normalize_error(message="Invalid Supabase RPC response", status_code=response.status_code)
+
+    async def storage_download_bytes(self, access_token: str, *, bucket: str, path: str) -> bytes:
+        """Download a Storage object as bytes using the caller's JWT (RLS applies)."""
+        headers = build_supabase_headers(access_token)
+        # Content-Type is irrelevant for GET downloads; avoid forcing JSON.
+        headers.pop("Content-Type", None)
+        clean_path = path.lstrip("/")
+        url = f"{settings.supabase_storage_url}/object/{bucket}/{clean_path}"
+        resp = await http_client.get(url=url, headers=headers, raise_for_status=False)
+        if resp.status_code >= 400:
+            raise RuntimeError(f"Storage download failed ({resp.status_code}): {resp.text[:200]}")
+        return resp.content
 
 _supabase_service = SupabaseService()
 

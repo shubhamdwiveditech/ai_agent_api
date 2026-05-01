@@ -7,7 +7,6 @@ from fastapi.responses import HTMLResponse
 from app.api.routes import auth_router, chat_router, embed_router
 from app.services.cors_service import setup_cors
 from app.services.supabase_service import close_supabase
-from app.services.llm_services.openai_service import close_openai
 
 # ── Logging ───────────────────────────────────────────────────────────────────
 _level_name = (os.getenv("LOG_LEVEL") or "INFO").upper().strip()
@@ -33,7 +32,6 @@ app.include_router(auth_router.router)
 async def shutdown_event():
     """Close async HTTP clients on shutdown."""
     await close_supabase()
-    await close_openai()
 
 
 # ── Root ──────────────────────────────────────────────────────────────────────

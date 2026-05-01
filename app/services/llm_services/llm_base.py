@@ -33,3 +33,6 @@ class LLMService(ABC):
     async def embeddings(self, *, input: str | list[str]) -> dict[str, Any]:
         raise NotImplementedError
 
+    async def aclose(self) -> None:
+        """Optional cleanup hook for providers with their own HTTP clients."""
+        return None

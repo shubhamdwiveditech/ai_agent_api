@@ -11,7 +11,6 @@ from typing import Any, AsyncIterator
 import httpx
 from fastapi import HTTPException
 
-from app.core.config import get_settings
 from app.schemas.llm_context_schema import LLMModelConfig
 from app.services.llm_services.llm_base import LLMService
 
@@ -180,24 +179,3 @@ class OpenAILLMService(LLMService):
 
     async def aclose(self) -> None:
         await self._client.aclose()
-
-
-# ----------------------------------------------------------------------
-# FastAPI dependency / lifecycle helpers
-# ----------------------------------------------------------------------
-_singleton: OpenAIService | None = None
-
-
-def get_openai() -> OpenAIService:
-    global _singleton
-    if _singleton is None:
-        s = get_settings()
-        _singleton = OpenAIService(api_key=s.openai_api_key, base_url=OPENAI_BASE, timeout=s.http_timeout_seconds)
-    return _singleton
-
-
-async def close_openai() -> None:
-    global _singleton
-    if _singleton is not None:
-        await _singleton.aclose()
-        _singleton = None
