@@ -5,6 +5,7 @@ from __future__ import annotations
 from fastapi import HTTPException
 
 from app.schemas.agent_schema import AgentFull
+from app.schemas.chat_schema import ChatMessage
 from app.schemas.llm_config_schema import LLMConfigForCache
 from app.schemas.llm_context_schema import LLMContext
 from app.services.supabase_service import get_supabase_service
@@ -79,7 +80,92 @@ class AgentService:
         }
 
         return LLMContext.model_validate(payload)
-        
+    
+    async def save_chat( self, access_token: str, *, session_id: int, role: str,content: str,) -> dict:
+        """Save a chat message via public.fn_save_chat."""
+        payload = {
+            "p_session_id": session_id,
+            "p_role": role,
+            "p_content": content,
+        }
+        envelope = await get_supabase_service().rpc(
+            access_token,
+            "fn_save_chat",
+            payload,
+        )
+        if not envelope.get("is_success"):
+            raise HTTPException(
+                status_code=502,
+                detail=envelope.get("message") or "Failed to save chat",
+            )
+
+        data = envelope.get("data") or []
+        if not isinstance(data, list) or len(data) == 0:
+            raise HTTPException(status_code=502, detail="No data returned from fn_save_chat")
+
+        return data[0]
+    
+    async def get_chats( self, access_token: str, * , session_id: int, ) -> list[ChatMessage]:
+        """Fetch chats for a session via public.fn_get_chats."""
+        payload = {
+            "p_session_id": session_id,
+        }
+        envelope = await get_supabase_service().rpc(
+            access_token,
+            "fn_get_chats",
+            payload,
+        )
+        if not envelope.get("is_success"):
+            raise HTTPException(
+                status_code=502,
+                detail=envelope.get("message") or "Failed to fetch chats",
+            )
+
+        data = envelope.get("data") or []
+        if not isinstance(data, list):
+            return []
+
+        items: list[ChatMessage] = []
+        for row in data:
+            if isinstance(row, dict):
+                items.append(ChatMessage.model_validate(row))
+        return items
+
+    async def save_agent_execution_log(
+        self,
+        access_token: str,
+        *,
+        name: str,
+        run_id: str,
+        node_name: str,
+        event_type: str,
+        data: dict = {},
+    ) -> dict:
+        """Save agent execution log via public.fn_save_agent_execution_log."""
+        payload = {
+            "p_name":       name,
+            "p_run_id":     run_id,
+            "p_node_name":  node_name,
+            "p_event_type": event_type,
+            "p_data":       data,
+        }
+        envelope = await get_supabase_service().rpc(
+            access_token,
+            "fn_save_agent_execution_log",
+            payload,
+        )
+        if not envelope.get("is_success"):
+            raise HTTPException(
+                status_code=502,
+                detail=envelope.get("message") or "Failed to save agent execution log",
+            )
+
+        result = envelope.get("data") or []
+        if not isinstance(result, list) or len(result) == 0:
+            raise HTTPException(status_code=502, detail="No data returned from fn_save_agent_execution_log")
+
+        return result[0]
+
 _agent_service = AgentService()
 
 
