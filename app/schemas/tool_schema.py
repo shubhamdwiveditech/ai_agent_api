@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from typing import Any, Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, schema
 
 
 JSONSchemaType = Literal[
@@ -36,7 +36,7 @@ class ToolInputSchema(BaseModel):
     model_config = ConfigDict(extra="allow")
 
     type: JSONSchemaType = Field(default="object")
-    properties: dict[str, Any] | None = None
+    properties: dict[str, Any] = Field(default_factory=dict)
     required: list[str] | None = None
 
 
@@ -61,13 +61,14 @@ class ToolDefinition(BaseModel):
     
     
     def to_openai_tool(self) -> dict[str, Any]:
-        """Render into OpenAI Responses/ChatCompletions tool format (function tool)."""
+        schema = self.inputSchema.model_dump(exclude_none=True)
+        schema.setdefault("properties", {})  
         return {
             "type": "function",
             "function": {
                 "name": self.name,
                 "description": self.description,
-                "parameters": self.inputSchema.model_dump(exclude_none=True),
+                "parameters": schema,
             },
         }
 

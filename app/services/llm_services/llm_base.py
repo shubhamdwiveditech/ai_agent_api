@@ -1,4 +1,4 @@
-"""Abstract LLM service interface (chat + embeddings)."""
+"""Abstract LLM service interface (chat + embeddings + tool calling)."""
 
 from __future__ import annotations
 
@@ -16,6 +16,8 @@ class LLMService(ABC):
         messages: list[dict[str, str]],
         temperature: float = 0.7,
         max_tokens: int | None = None,
+        tools: list[dict[str, Any]] | None = None,
+        tool_choice: str | dict[str, Any] | None = None,
     ) -> dict[str, Any]:
         raise NotImplementedError
 
@@ -26,6 +28,8 @@ class LLMService(ABC):
         messages: list[dict[str, str]],
         temperature: float = 0.7,
         max_tokens: int | None = None,
+        tools: list[dict[str, Any]] | None = None,
+        tool_choice: str | dict[str, Any] | None = None,
     ) -> AsyncIterator[dict[str, Any]]:
         raise NotImplementedError
 

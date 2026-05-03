@@ -6,8 +6,10 @@ from app.core.auth import require_user
 from app.schemas.chat_schema import ChatMessage, ChatRequest, ChatResponse
 from app.schemas.user_context_schema import UserContext
 from app.services.agent_service import get_agent_service
+from app.services.common_service import LLMResponseType, parse_llm_response
 from app.services.supabase_service import SupabaseService, get_supabase_service
 from app.services.llm_services.llm_factory import get_llm_service
+from app.services.tool_executor_service import get_tool_executor
 
 router = APIRouter(prefix="/chat", tags=["chat"], dependencies=[Depends(require_user)])
 
@@ -25,6 +27,7 @@ async def chat(
         
         """Fetch agent config for the given agent_id."""
         agent = await get_agent_service().get_agent_full(user.access_token, agent_id=body.agent_id)
+        
         if agent is None:
             raise HTTPException(status_code=404, detail="Agent not found")
 
@@ -32,6 +35,7 @@ async def chat(
             
         """Fetch LLM context for the agent's LLM config."""
         all_llms = await get_agent_service().get_llm_configs_for_cache(user.access_token, config_id=agent.llm_config_id)
+        
         if all_llms is None:
             raise HTTPException(status_code=404, detail="LLM configuration is not found for selected agent")
         
@@ -53,11 +57,41 @@ async def chat(
         
         messages.append(ChatMessage(session_id=body.session_id, role="user", content=body.message))
       
+        # Merge tools from multiple sources
+        tool_definitions = get_agent_service().agent_tools_to_tool_definitions(
+            agent.tools,
+            agent.analytics_tools,
+        )
+
+        
         response = await llm_service.chat_completion(
-                    messages=[m.to_llm_dict() for m in messages]
+                    messages=[m.to_llm_dict() for m in messages],
+                    tools=[t.to_openai_tool() for t in tool_definitions],
                 )
                         
         print("LLM response:", response)
+        
+        response_type, payload = parse_llm_response(response)
+
+        if response_type == LLMResponseType.TOOL_CALL:
+            for tool_call in payload:
+                print(tool_call["name"])   # fn_create_vas_request
+                print(tool_call["args"])   # {"service_type": "Premium Lounge Access", ...}
+                print(tool_call["id"])     # call_Do67b8jUZP04JEQ7mvMDAhey
+                
+                
+                tool_response =  get_tool_executor().execute(
+                    tool=next((t for t in tool_definitions if t.name == tool_call["name"]), None),
+                    arguments=tool_call["args"],
+                    user=user,
+                    llm_context=llm_context,
+                )
+                print(tool_response)      # {"request_id": "vas_12345", "status": "confirmed", ...}
+                content = get_reply(response)
+
+        elif response_type == LLMResponseType.MESSAGE:
+            print(payload)                 # plain text reply
+            
         content = get_reply(response)
         
         _ = await get_agent_service().save_agent_execution_log(access_token=user.access_token, name=agent.name, run_id=body.session_id, node_name="chat_node", event_type="response", data={"response": content})

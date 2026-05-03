@@ -1,8 +1,4 @@
-"""Async OpenAI REST client + LLMService implementation over httpx.
-
-We avoid the official `openai` SDK so the dependency surface stays small
-and we keep full control over streaming.
-"""
+"""Async OpenAI REST client + LLMService implementation over httpx."""
 from __future__ import annotations
 
 import json
@@ -43,7 +39,7 @@ class OpenAIService:
         if resp.status_code >= 400:
             try:
                 detail = resp.json()
-            except Exception:  # noqa: BLE001
+            except Exception:
                 detail = resp.text
             raise OpenAIError(code=resp.status_code, detail=detail)
 
@@ -57,6 +53,8 @@ class OpenAIService:
         messages: list[dict[str, str]],
         temperature: float = 0.7,
         max_tokens: int | None = None,
+        tools: list[dict[str, Any]] | None = None,
+        tool_choice: str | dict[str, Any] | None = None,
     ) -> dict[str, Any]:
         payload: dict[str, Any] = {
             "model": model,
@@ -65,6 +63,10 @@ class OpenAIService:
         }
         if max_tokens is not None:
             payload["max_tokens"] = max_tokens
+        if tools:
+            payload["tools"] = tools
+            payload["tool_choice"] = tool_choice or "auto"
+
         resp = await self._client.post("/chat/completions", json=payload)
         self._raise(resp)
         return resp.json()
@@ -76,12 +78,9 @@ class OpenAIService:
         messages: list[dict[str, str]],
         temperature: float = 0.7,
         max_tokens: int | None = None,
+        tools: list[dict[str, Any]] | None = None,
+        tool_choice: str | dict[str, Any] | None = None,
     ) -> AsyncIterator[dict[str, Any]]:
-        """Yields parsed delta chunks from the OpenAI streaming endpoint.
-
-        Each yielded item is the JSON object from a `data: ...` SSE line
-        (or the literal sentinel as ``{"done": True}``).
-        """
         payload: dict[str, Any] = {
             "model": model,
             "messages": messages,
@@ -90,20 +89,21 @@ class OpenAIService:
         }
         if max_tokens is not None:
             payload["max_tokens"] = max_tokens
+        if tools:
+            payload["tools"] = tools
+            payload["tool_choice"] = tool_choice or "auto"
 
         async with self._client.stream("POST", "/chat/completions", json=payload) as resp:
             if resp.status_code >= 400:
                 body = await resp.aread()
                 try:
                     detail = json.loads(body)
-                except Exception:  # noqa: BLE001
+                except Exception:
                     detail = body.decode("utf-8", errors="replace")
                 raise OpenAIError(code=resp.status_code, detail=detail)
 
             async for line in resp.aiter_lines():
-                if not line:
-                    continue
-                if not line.startswith("data:"):
+                if not line or not line.startswith("data:"):
                     continue
                 data = line[len("data:"):].strip()
                 if data == "[DONE]":
@@ -151,12 +151,16 @@ class OpenAILLMService(LLMService):
         messages: list[dict[str, str]],
         temperature: float = 0.7,
         max_tokens: int | None = None,
+        tools: list[dict[str, Any]] | None = None,
+        tool_choice: str | dict[str, Any] | None = None,
     ) -> dict[str, Any]:
         return await self._client.chat_completion(
             model=self._model,
             messages=messages,
             temperature=temperature,
             max_tokens=max_tokens,
+            tools=tools,
+            tool_choice=tool_choice,
         )
 
     async def chat_completion_stream(
@@ -165,12 +169,16 @@ class OpenAILLMService(LLMService):
         messages: list[dict[str, str]],
         temperature: float = 0.7,
         max_tokens: int | None = None,
+        tools: list[dict[str, Any]] | None = None,
+        tool_choice: str | dict[str, Any] | None = None,
     ) -> AsyncIterator[dict[str, Any]]:
         async for chunk in self._client.chat_completion_stream(
             model=self._model,
             messages=messages,
             temperature=temperature,
             max_tokens=max_tokens,
+            tools=tools,
+            tool_choice=tool_choice,
         ):
             yield chunk
 

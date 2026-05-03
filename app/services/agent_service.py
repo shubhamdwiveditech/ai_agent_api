@@ -1,13 +1,15 @@
 """Agent service layer built on Supabase RPCs."""
 
 from __future__ import annotations
+from typing import Any
 
 from fastapi import HTTPException
 
-from app.schemas.agent_schema import AgentFull
+from app.schemas.agent_schema import AgentFull, AgentTool
 from app.schemas.chat_schema import ChatMessage
 from app.schemas.llm_config_schema import LLMConfigForCache
 from app.schemas.llm_context_schema import LLMContext
+from app.schemas.tool_schema import ToolDefinition, ToolInputSchema
 from app.services.supabase_service import get_supabase_service
 
 
@@ -165,6 +167,59 @@ class AgentService:
             raise HTTPException(status_code=502, detail="No data returned from fn_save_agent_execution_log")
 
         return result[0]
+
+
+
+    def agent_tools_to_tool_definitions( self,
+        *tool_lists: list[AgentTool],
+    ) -> list[ToolDefinition]:
+        """Convert one or more AgentTool lists into merged ToolDefinition list.
+
+        Usage:
+            tools = agent_tools_to_tool_definitions(agent.tools, agent.analytics_tools)
+        """
+        definitions: list[ToolDefinition] = []
+        seen: set[str] = set()
+
+        for tool_list in tool_lists:
+            for tool in tool_list:
+                if tool.name in seen:
+                    continue
+                seen.add(tool.name)
+
+                # Build JSON schema properties + required from fields
+                properties: dict[str, Any] = {}
+                required: list[str] = []
+
+                for field in tool.fields:
+                    prop: dict[str, Any] = {
+                        "type": field.type or "string",
+                    }
+                    if field.description:
+                        prop["description"] = field.description
+                    if field.path:
+                        prop["path"] = field.path
+
+                    properties[field.name] = prop
+
+                    if field.required:
+                        required.append(field.name)
+
+                definitions.append(
+                    ToolDefinition(
+                        name=tool.name,
+                        description=tool.name.replace("_", " ").title(),
+                        runtime="http" if tool.url else "local",
+                        inputSchema=ToolInputSchema(
+                            type="object",
+                            properties=properties,
+                            required=required or None,
+                        ),
+                    )
+                )
+
+        return definitions
+
 
 _agent_service = AgentService()
 
