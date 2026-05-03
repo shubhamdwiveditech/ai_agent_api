@@ -209,6 +209,8 @@ class AgentService:
                     ToolDefinition(
                         name=tool.name,
                         description=tool.name.replace("_", " ").title(),
+                        url=tool.url,
+                        headers=tool.headers,
                         runtime="http" if tool.url else "local",
                         inputSchema=ToolInputSchema(
                             type="object",

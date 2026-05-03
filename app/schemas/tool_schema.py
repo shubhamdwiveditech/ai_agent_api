@@ -53,6 +53,8 @@ class ToolDefinition(BaseModel):
 
     name: str = Field(..., min_length=1)
     title: str | None = None
+    url: str | None = None
+    headers: dict[str, str] | None = None
     description: str = Field(..., min_length=1)
     inputSchema: ToolInputSchema = Field(default_factory=ToolInputSchema)
     icons: list[ToolIcon] | None = None

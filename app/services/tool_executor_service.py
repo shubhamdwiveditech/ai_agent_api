@@ -101,11 +101,17 @@ class ToolExecutorService:
             return handler(arguments)
 
         if runtime == "http":
-            cfg = self._resolve_http_config(tool.name, user=user)
+            
+            headers = {
+                "Content-Type": "application/json",
+                "Authorization": f"Bearer {user.access_token}",
+            }
+            tool.headers and headers.update(tool.headers)
+            
             resp = await http_client.post(
-                url=cfg.url,
-                json={"name": tool.name, "arguments": arguments},
-                headers=cfg.headers,
+                url=tool.url,
+                json=arguments,
+                headers=headers,
                 raise_for_status=False,
             )
             if resp.status_code >= 400:
@@ -125,27 +131,6 @@ class ToolExecutorService:
         with self._lock:
             return self._local_handlers.get(tool_name)
 
-    def _resolve_http_config(self, tool_name: str, *, user: UserContext) -> HTTPToolConfig:
-        key = self._cache_key(tool_name, user)
-        with self._lock:
-            cached = self._http_cfg_cache.get(key)
-        if cached is not None:
-            return cached
-
-        settings = get_settings()
-        base = settings.tool_http_base_url.strip()
-        if not base:
-            raise ValueError(f"TOOL_HTTP_BASE_URL is not configured for http tool: {tool_name}")
-
-        url = f"{base.rstrip('/')}/{tool_name}"
-        headers = {
-            "Content-Type": "application/json",
-            "Authorization": f"Bearer {user.access_token}",
-        }
-        cfg = HTTPToolConfig(url=url, headers=headers)
-        with self._lock:
-            self._http_cfg_cache[key] = cfg
-        return cfg
 
 
 _executor = ToolExecutorService()
