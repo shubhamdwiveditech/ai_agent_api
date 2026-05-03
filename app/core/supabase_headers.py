@@ -12,7 +12,11 @@ def build_supabase_headers(access_token: str | None = None) -> dict[str, str]:
         "Content-Type": "application/json",
     }
     if access_token:
-        headers["Authorization"] = f"Bearer {access_token}"
+        is_jwt = access_token.count(".") == 2
+        if is_jwt:
+            headers["Authorization"] = f"Bearer {access_token}"
+        else:
+            headers["x-api-key"] = access_token
     return headers
 
 

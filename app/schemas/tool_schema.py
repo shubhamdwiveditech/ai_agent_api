@@ -83,5 +83,8 @@ class ToolDefinition(BaseModel):
         }
 
     def to_mcp_tool(self) -> dict[str, Any]:
-        """Render into MCP tool list format (same shape as this schema)."""
-        return self.model_dump(exclude_none=True, exclude={"runtime"})
+        """Render into MCP tool list format."""
+        return self.model_dump(
+            exclude_none=True,
+            exclude={"url", "headers", "icons", "execution", "runtime"}
+        )
