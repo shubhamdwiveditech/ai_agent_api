@@ -4,7 +4,7 @@ import os
 from fastapi import FastAPI
 from fastapi.responses import HTMLResponse
 
-from app.api.routes import auth_router, chat_router, embed_router
+from app.api.routes import auth_router, chat_router, embed_router, mcp_router
 from app.services.cors_service import setup_cors
 from app.services.supabase_service import close_supabase
 
@@ -25,6 +25,7 @@ setup_cors(app)
 app.include_router(chat_router.router)
 app.include_router(embed_router.router)
 app.include_router(auth_router.router)
+app.include_router(mcp_router.router)
 
 
 # ── Lifecycle ─────────────────────────────────────────────────────────────────
