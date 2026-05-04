@@ -153,7 +153,7 @@ async def sse_connect(
 async def handle_message(
     body: _RpcRequest,
     request: Request,
-    mcp_session_id: str = Header(...),
+    mcp_session_id: str | None = Header(default=None),
     x_api_key: str | None = Header(default=None),
     authorization: str | None = Header(default=None),
     supabase: SupabaseService = Depends(get_supabase_service),
@@ -162,9 +162,9 @@ async def handle_message(
     if not token:
         raise HTTPException(status_code=401, detail="Missing authentication")
 
-    queue = _sessions.get(mcp_session_id)
-    if queue is None:
-        raise HTTPException(status_code=404, detail=f"Session not found: {mcp_session_id}")
+    # Session is optional — stateless POST (e.g. Claude's post-OAuth handshake)
+    # works fine since the response is always returned directly over HTTP.
+    queue = _sessions.get(mcp_session_id) if mcp_session_id else None
 
     is_notification = body.id is None
     response_payload: dict | None = None
@@ -204,7 +204,7 @@ async def handle_message(
         response_payload = _build(error=_RpcError(code=-32603, message=str(exc)))
 
     # ── Also push to SSE queue for clients that read via stream ──
-    if response_payload and not is_notification:
+    if queue is not None and response_payload and not is_notification:
         await queue.put(response_payload)
 
     # ── Return directly in HTTP response (primary path) ──────────
