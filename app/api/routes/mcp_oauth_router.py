@@ -24,6 +24,7 @@ import html
 import uuid
 from dataclasses import dataclass
 from typing import Optional
+from urllib.parse import quote
 
 from fastapi import APIRouter, Form, Request
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
@@ -191,7 +192,7 @@ async def oauth_authorize_submit(
     )
     asyncio.create_task(_expire_code(code))
 
-    redirect_url = f"{redirect_uri}?code={code}&state={state}"
+    redirect_url = f"{redirect_uri}?code={code}&state={quote(state or '', safe='')}"
     return RedirectResponse(url=redirect_url, status_code=302)
 
 

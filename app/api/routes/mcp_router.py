@@ -112,8 +112,30 @@ async def _on_tools_call(access_token: str, params: dict | None, request: Reques
 # ── Routes ────────────────────────────────────────────────────
 
 
+def _extract_token(x_api_key: str | None, authorization: str | None) -> str | None:
+    """Return API key from x-api-key header or Authorization: Bearer <token>."""
+    if x_api_key:
+        return x_api_key
+    if authorization and authorization.lower().startswith("bearer "):
+        return authorization[7:].strip()
+    return None
+
+
 @router.get("/")
-async def sse_connect(request: Request) -> StreamingResponse:
+async def sse_connect(
+    request: Request,
+    x_api_key: str | None = Header(default=None),
+    authorization: str | None = Header(default=None),
+) -> StreamingResponse:
+    token = _extract_token(x_api_key, authorization)
+    if not token:
+        base_url = str(request.base_url).rstrip("/")
+        raise HTTPException(
+            status_code=401,
+            headers={"WWW-Authenticate": f'Bearer realm="{base_url}"'},
+            detail="Authentication required",
+        )
+
     sid = str(uuid.uuid4())
     _sessions[sid] = asyncio.Queue()
 
@@ -123,7 +145,7 @@ async def sse_connect(request: Request) -> StreamingResponse:
         headers={
             "Cache-Control": "no-cache",
             "X-Accel-Buffering": "no",
-            "Mcp-Session-Id": sid 
+            "Mcp-Session-Id": sid,
         },
     )
 
@@ -132,9 +154,14 @@ async def handle_message(
     body: _RpcRequest,
     request: Request,
     mcp_session_id: str = Header(...),
-    x_api_key: str = Header(...),
+    x_api_key: str | None = Header(default=None),
+    authorization: str | None = Header(default=None),
     supabase: SupabaseService = Depends(get_supabase_service),
 ) -> dict:
+    token = _extract_token(x_api_key, authorization)
+    if not token:
+        raise HTTPException(status_code=401, detail="Missing authentication")
+
     queue = _sessions.get(mcp_session_id)
     if queue is None:
         raise HTTPException(status_code=404, detail=f"Session not found: {mcp_session_id}")
@@ -155,12 +182,12 @@ async def handle_message(
             response_payload = _build({})
 
         elif body.method == "tools/list":
-            tools = await get_mcp_service().get_mcp_tools(access_token=x_api_key)
+            tools = await get_mcp_service().get_mcp_tools(access_token=token)
             mcp_tools = [t.to_mcp_tool() for t in tools] if tools else []
             response_payload = _build({"tools": mcp_tools})
 
         elif body.method == "tools/call":
-            result = await _on_tools_call(x_api_key, body.params, request)
+            result = await _on_tools_call(token, body.params, request)
             response_payload = _build(result)
 
         elif is_notification:
