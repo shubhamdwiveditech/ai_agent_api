@@ -103,9 +103,16 @@ class ToolExecutorService:
         if runtime == "http":
             
             headers = {
-                "Content-Type": "application/json",
-                "Authorization": f"Bearer {user.access_token}",
+                "Content-Type": "application/json"
             }
+            
+            if user.access_token:
+                is_jwt = user.access_token.count(".") == 2
+                if is_jwt:
+                    headers["Authorization"] = f"Bearer {user.access_token}"
+                else:
+                    headers["x-api-key"] = user.access_token
+            
             tool.headers and headers.update(tool.headers)
             
             resp = await http_client.post(

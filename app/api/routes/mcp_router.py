@@ -11,6 +11,7 @@ from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
 
+from app.schemas.user_context_schema import UserContext
 from app.services.supabase_service import SupabaseService, get_supabase_service
 from app.services.supabase_service import SupabaseService
 from app.services.mcp_service import get_mcp_service
@@ -100,9 +101,15 @@ async def _on_tools_call(access_token: str, params: dict | None, request: Reques
     if tool is None:
         raise KeyError(f"Unknown tool: {name}")
 
-    # User context is optional — local handlers don't need it;
-    # HTTP tools will raise naturally if auth is missing.
-    user = getattr(request.state, "user", None)
+    user = UserContext(
+        user_id="mcp_user",
+        tenant_id=None,
+        email=None,
+        user_name=None,
+        data=None,
+        tenant=None,
+        access_token=access_token,
+    )
     raw = await get_tool_executor().execute(tool=tool, arguments=arguments, user=user)
 
     text = raw if isinstance(raw, str) else json.dumps(raw)
