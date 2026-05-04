@@ -6,7 +6,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 # ── CORS configuration (edit here to change behaviour) ────────────────────────
-_DEFAULT_ASSETINFINITY_REGEX = r"^https://([a-z0-9-]+\.)*assetinfinity\.(io|ai)$"
+_DEFAULT_APP_REGEX = r"^https://([a-z0-9-]+\.)*lovable\.(app|ai)$"
 _LOCALHOST_REGEX = r"^https?://(localhost|127\.0\.0\.1)(:\d+)?$"
 
 _DEFAULT_ALLOW_METHODS = "GET,POST,PUT,PATCH,DELETE,OPTIONS"
@@ -65,7 +65,7 @@ def setup_cors(app: FastAPI) -> None:
 
     if not cors_is_configured:
         parsed_origins = []
-        parsed_regex = _DEFAULT_ASSETINFINITY_REGEX
+        parsed_regex = _DEFAULT_APP_REGEX
 
     if _cors_is_dev_mode():
         parsed_regex = _or_regex(parsed_regex, _LOCALHOST_REGEX)
