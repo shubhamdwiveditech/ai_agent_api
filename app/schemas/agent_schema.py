@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any, Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 
 HTTPMethod = Literal["GET", "POST", "PUT", "PATCH", "DELETE"]
@@ -59,4 +59,9 @@ class AgentFull(BaseModel):
 
     tools: list[AgentTool] = Field(default_factory=list)
     analytics_tools: list[AgentTool] = Field(default_factory=list)
+
+    @field_validator("tools", "analytics_tools", mode="before")
+    @classmethod
+    def coerce_none_to_list(cls, v: Any) -> Any:
+        return v if v is not None else []
 
