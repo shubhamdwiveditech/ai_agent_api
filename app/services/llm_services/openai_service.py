@@ -8,6 +8,7 @@ import httpx
 from fastapi import HTTPException
 
 from app.schemas.llm_context_schema import LLMModelConfig
+from app.schemas.tool_schema import ToolDefinition
 from app.services.llm_services.llm_base import LLMService
 
 
@@ -144,6 +145,9 @@ class OpenAILLMService(LLMService):
     @property
     def model(self) -> str:
         return self._model
+
+    def format_tools(self, tool_definitions: list[ToolDefinition]) -> list[dict[str, Any]] | None:
+        return [t.to_openai_tool() for t in tool_definitions] or None
 
     async def chat_completion(
         self,

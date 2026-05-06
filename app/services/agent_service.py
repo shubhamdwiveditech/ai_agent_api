@@ -60,7 +60,6 @@ class ChatContext:
     llm_context: LLMContext
     tool_definitions: list[ToolDefinition]
     llm_dict_messages: list[dict]
-    openai_tools: list[dict] | None
 
 
 # ── Service ───────────────────────────────────────────────────────────────────
@@ -185,7 +184,6 @@ class AgentService:
 
         tool_definitions = self.agent_tools_to_tool_definitions(agent.tools, agent.analytics_tools)
         llm_dict_messages = [m.to_llm_dict() for m in messages]
-        openai_tools = [t.to_openai_tool() for t in tool_definitions] or None
 
         return ChatContext(
             agent=agent,
@@ -193,7 +191,6 @@ class AgentService:
             llm_context=llm_context,
             tool_definitions=tool_definitions,
             llm_dict_messages=llm_dict_messages,
-            openai_tools=openai_tools,
         )
 
     # ── Tool execution ────────────────────────────────────────────────────────

@@ -131,8 +131,10 @@ async def chat(
 
     persist_args = (user.access_token, ctx.agent.name, body.session_id)
 
+    provider_tools = ctx.llm_service.format_tools(ctx.tool_definitions)
+
     # ── Case 2: stream=True, no tools — stream first call directly ────────────
-    if body.stream and not ctx.openai_tools:
+    if body.stream and not provider_tools:
         return StreamingResponse(
             _stream_direct(ctx.llm_service, ctx.llm_dict_messages, *persist_args),
             media_type="text/event-stream",
@@ -140,9 +142,9 @@ async def chat(
 
     # ── First LLM call (non-streaming) — required for tool-call detection ─────
     response = await ctx.llm_service.chat_completion(
-        messages=ctx.llm_dict_messages, tools=ctx.openai_tools,
+        messages=ctx.llm_dict_messages, tools=provider_tools,
     )
-    print("LLM response:", response)
+ 
     response_type, payload = parse_llm_response(response)
 
     # ── Case 1: stream=True + tool call ───────────────────────────────────────
