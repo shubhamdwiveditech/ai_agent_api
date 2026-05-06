@@ -16,9 +16,14 @@ from app.services.llm_services.llm_base import LLMService
 from app.services.llm_services.llm_factory import get_llm_service
 from app.services.supabase_service import get_supabase_service
 from app.services.tool_executor_service import get_tool_executor
+from app.tools import chart_tool, rag_tool
 
 
 # ── RAG source extraction ─────────────────────────────────────────────────────
+
+def _to_str(v: Any) -> str | None:
+    return str(v) if v is not None else None
+
 
 def _extract_rag_sources(tool_results: list[dict]) -> list[RagSource]:
     """Pull chunk metadata out of tool results that look like KB search responses."""
@@ -34,18 +39,15 @@ def _extract_rag_sources(tool_results: list[dict]) -> list[RagSource]:
         for c in chunks:
             if not isinstance(c, dict):
                 continue
-            if not any(k in c for k in ("chunk_id", "item_id", "kb_id")):
+            if not any(k in c for k in ("item_name", "kb_name")):
                 continue
-            sim = c.get("similarity")
+            
             sources.append(RagSource(
                 n=n,
-                chunk_id=c.get("chunk_id"),
-                item_id=c.get("item_id"),
-                kb_id=c.get("kb_id"),
                 item_name=c.get("item_name"),
                 kb_name=c.get("kb_name"),
                 item_url=c.get("item_url"),
-                similarity=round(float(sim), 3) if sim is not None else None,
+                
             ))
             n += 1
     return sources
@@ -181,8 +183,22 @@ class AgentService:
             *history,
             ChatMessage(session_id=session_id, role="user", content=user_message),
         ]
-
+         
+                
         tool_definitions = self.agent_tools_to_tool_definitions(agent.tools, agent.analytics_tools)
+        existing_names = {t.name for t in tool_definitions}
+
+        if agent.knowledge_bases:
+            definition = rag_tool.ensure_registered()
+            if definition.name not in existing_names:
+                tool_definitions.append(definition)
+                existing_names.add(definition.name)
+
+        if agent.analytics_tools:
+            definition = chart_tool.ensure_registered()
+            if definition.name not in existing_names:
+                tool_definitions.append(definition)
+
         llm_dict_messages = [m.to_llm_dict() for m in messages]
 
         return ChatContext(

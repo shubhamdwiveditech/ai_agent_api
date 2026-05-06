@@ -171,11 +171,12 @@ async def chat(
         )
         final = await ctx.llm_service.chat_completion(messages=tool_messages)
         content = final["choices"][0]["message"].get("content", "")
+        await get_agent_service().persist_chat_response(*persist_args, content)
 
     # ── Case 4: stream=False + no tool call ───────────────────────────────────
     else:
         sources = []
         content = payload
 
-    await get_agent_service().persist_chat_response(*persist_args, content)
+    
     return ChatResponse(role="assistant", content=content, sources=sources or None)

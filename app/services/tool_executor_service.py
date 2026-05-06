@@ -7,6 +7,7 @@ Separates:
 
 from __future__ import annotations
 
+import asyncio
 from dataclasses import dataclass
 import threading
 from typing import Any
@@ -89,7 +90,6 @@ class ToolExecutorService:
             user: UserContext for auth/tenant scoping.
             llm_context: Optional LLMContext (useful for provider-specific routing).
         """
-        _ = llm_context
         runtime = (tool.runtime or "").strip().lower()
         if not runtime:
             runtime = "local" if self._has_local_handler(tool.name) else "http"
@@ -98,7 +98,10 @@ class ToolExecutorService:
             handler = self._get_local_handler(tool.name)
             if handler is None:
                 raise KeyError(f"No local handler registered for tool: {tool.name}")
-            return handler(arguments)
+            result = handler(arguments, user=user, llm_context=llm_context)
+            if asyncio.iscoroutine(result):
+                return await result
+            return result
 
         if runtime == "http":
             
