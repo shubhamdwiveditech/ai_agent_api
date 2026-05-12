@@ -1,6 +1,7 @@
 """/chat endpoint — multi-turn chat persisted to Supabase."""
 from __future__ import annotations
 import json
+from typing import Any
 from fastapi import APIRouter, Depends
 from fastapi.responses import StreamingResponse
 
@@ -15,23 +16,51 @@ from app.services.supabase_service import SupabaseService, get_supabase_service
 router = APIRouter(prefix="/chat", tags=["chat"], dependencies=[Depends(require_user)])
 
 
-# ── SSE formatting ────────────────────────────────────────────────────────────
-# UI contract:
-#   {"type": "status",  "message": "..."}          process notification
-#   {"type": "content", "content": "token..."}     text delta
-#   {"type": "sources", "sources": [{...}, ...]}   RAG citations (before DONE)
-#   data: [DONE]                                   stream end
+# ── Block detection ───────────────────────────────────────────────────────────
+# Results whose "type" is in this set are emitted as tool_block events so the
+# UI renders them natively (no server-side rendering, fastest path).
+_BLOCK_TYPES = frozenset({"form", "table", "chart", "card", "list", "kanban"})
 
-def _sse_content(delta: str) -> str:
-    return f"data: {json.dumps({'type': 'content', 'content': delta})}\n\n"
 
-def _sse_status(message: str) -> str:
-    return f"data: {json.dumps({'type': 'status', 'message': message})}\n\n"
+def _is_block(result: Any) -> bool:
+    return isinstance(result, dict) and result.get("type") in _BLOCK_TYPES
+
+
+def _row_count(result: Any) -> int:
+    if isinstance(result, list):
+        return len(result)
+    if isinstance(result, dict):
+        for key in ("data", "chunks", "rows", "items", "results"):
+            if isinstance(result.get(key), list):
+                return len(result[key])
+    return 1 if result else 0
+
+
+# ── SSE helpers (StreamEvent wire contract) ───────────────────────────────────
+# Client union type:
+#   { type: "text_delta";  text: string }
+#   { type: "tool_block";  block: ToolBlock }      — UI renders form/table/chart natively
+#   { type: "mcp_call";    tool: string; params: Record<string, unknown> }
+#   { type: "mcp_result";  tool: string; rowCount: number }
+#   { type: "sources";     sources: RagSource[] }  — RAG citations (extra, not in TS union)
+#   { type: "done" }
+
+def _sse_text_delta(text: str) -> str:
+    return f"data: {json.dumps({'type': 'text_delta', 'text': text})}\n\n"
+
+def _sse_tool_block(block: dict) -> str:
+    return f"data: {json.dumps({'type': 'tool_block', 'block': block})}\n\n"
+
+def _sse_mcp_call(tool: str, params: dict) -> str:
+    return f"data: {json.dumps({'type': 'mcp_call', 'tool': tool, 'params': params})}\n\n"
+
+def _sse_mcp_result(tool: str, row_count: int) -> str:
+    return f"data: {json.dumps({'type': 'mcp_result', 'tool': tool, 'rowCount': row_count})}\n\n"
 
 def _sse_sources(sources: list[RagSource]) -> str:
     return f"data: {json.dumps({'type': 'sources', 'sources': [s.model_dump(exclude_none=True) for s in sources]})}\n\n"
 
-SSE_DONE = "data: [DONE]\n\n"
+SSE_DONE = 'data: {"type":"done"}\n\n'
 
 
 # ── Shared message builder ────────────────────────────────────────────────────
@@ -53,7 +82,7 @@ async def _stream_direct(
     agent_name: str,
     session_id,
 ):
-    """Case 2 — stream=True, no tool call: pipe tokens straight to the client."""
+    """stream=True, no tool call: pipe tokens straight to the client."""
     content = ""
     async for chunk in llm_service.chat_completion_stream(messages=messages):
         if chunk.get("done"):
@@ -61,7 +90,7 @@ async def _stream_direct(
         delta = chunk.get("choices", [{}])[0].get("delta", {}).get("content", "")
         if delta:
             content += delta
-            yield _sse_content(delta)
+            yield _sse_text_delta(delta)
     yield SSE_DONE
     await get_agent_service().persist_chat_response(access_token, agent_name, session_id, content)
 
@@ -75,22 +104,29 @@ async def _stream_after_tools(
     agent_name: str,
     session_id,
 ):
-    """Case 1 — stream=True, tool call: notify progress → emit sources → stream final reply."""
+    """stream=True + tool call: mcp_call → execute → tool_block/mcp_result → stream reply."""
+    # 1. Announce tool invocations
     for tc in tool_calls:
-        yield _sse_status(f"Calling tool: {tc['name']}...")
+        yield _sse_mcp_call(tc["name"], tc.get("args", {}))
 
+    # 2. Execute all tools
     tool_results, sources = await get_agent_service().run_tools_with_sources(
         ctx.tool_definitions, tool_calls, user, ctx.llm_context,
     )
 
+    # 3. Emit block events (form/table/chart rendered by UI) + completion signal
     for tr in tool_results:
-        yield _sse_status(f"Tool '{tr['name']}' completed")
+        result = tr["result"]
+        if _is_block(result):
+            yield _sse_tool_block(result)
+        yield _sse_mcp_result(tr["name"], _row_count(result))
 
+    # 4. RAG citations (kept for backward compat — UI can optionally handle)
     if sources:
         yield _sse_sources(sources)
 
+    # 5. Stream LLM follow-up text with tool context
     tool_messages = _append_tool_messages(ctx.llm_dict_messages, assistant_msg, tool_results)
-    yield _sse_status("Generating response...")
 
     content = ""
     async for chunk in ctx.llm_service.chat_completion_stream(messages=tool_messages):
@@ -99,7 +135,7 @@ async def _stream_after_tools(
         delta = chunk.get("choices", [{}])[0].get("delta", {}).get("content", "")
         if delta:
             content += delta
-            yield _sse_content(delta)
+            yield _sse_text_delta(delta)
 
     yield SSE_DONE
     await get_agent_service().persist_chat_response(access_token, agent_name, session_id, content)
@@ -144,7 +180,7 @@ async def chat(
     response = await ctx.llm_service.chat_completion(
         messages=ctx.llm_dict_messages, tools=provider_tools,
     )
- 
+
     response_type, payload = parse_llm_response(response)
 
     # ── Case 1: stream=True + tool call ───────────────────────────────────────
@@ -166,6 +202,10 @@ async def chat(
         tool_results, sources = await get_agent_service().run_tools_with_sources(
             ctx.tool_definitions, payload, user, ctx.llm_context,
         )
+
+        # Pull out UI-rendered blocks before feeding results back to the LLM
+        blocks = [tr["result"] for tr in tool_results if _is_block(tr["result"])] or None
+
         tool_messages = _append_tool_messages(
             ctx.llm_dict_messages, response["choices"][0]["message"], tool_results,
         )
@@ -176,7 +216,7 @@ async def chat(
     # ── Case 4: stream=False + no tool call ───────────────────────────────────
     else:
         sources = []
+        blocks = None
         content = payload
 
-    
-    return ChatResponse(role="assistant", content=content, sources=sources or None)
+    return ChatResponse(role="assistant", content=content, sources=sources or None, blocks=blocks)

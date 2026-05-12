@@ -37,4 +37,5 @@ class ChatResponse(BaseModel):
     role: Literal["assistant"] = "assistant"
     content: str
     sources: list[RagSource] | None = None
+    blocks: list[dict[str, Any]] | None = None  # UI-rendered blocks (form/table/chart) for stream=False
     usage: dict[str, Any] | None = None
